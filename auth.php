@@ -1,4 +1,5 @@
 <?php
+// auth.php - Fixed authentication
 require_once 'config.php';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -26,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             redirect('login.php?error=invalid');
         }
     } else {
-        // Customer login
+        // Customer login - Fix nama file dashboard
         $query = "SELECT * FROM pelanggan WHERE Nama_Pembeli = '$username' AND Password = MD5('$password')";
         $result = mysqli_query($conn, $query);
 
@@ -36,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['username'] = $customer['Nama_Pembeli'];
             $_SESSION['nama'] = $customer['Nama_Pembeli'];
             $_SESSION['role'] = 'customer';
-            redirect('customer_dashboard.php');
+            // Fix: Redirect ke file yang benar (costumer_dashboard.php)
+            redirect('costumer_dashboard.php');
         } else {
             redirect('login.php?error=invalid');
         }

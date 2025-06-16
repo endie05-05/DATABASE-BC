@@ -67,4 +67,74 @@ try {
     $items_by_toko = [];
     foreach ($items as $item_id => $item_data) {
         // Get item details
-        $item_query = "SELECT * FROM
+        $item_query = "SELECT i.*, t.ID_Toko FROM item i JOIN toko t ON i.ID_Toko = t.ID_Toko WHERE i.ID_Item = '$item_id'";
+        $item_result = mysqli_query($conn, $item_query);
+        
+        if (mysqli_num_rows($item_result) > 0) {
+            $item = mysqli_fetch_assoc($item_result);
+            $toko_id = $item['ID_Toko'];
+            
+            if (!isset($items_by_toko[$toko_id])) {
+                $items_by_toko[$toko_id] = [];
+            }
+            
+            $items_by_toko[$toko_id][] = [
+                'item_id' => $item_id,
+                'quantity' => $item_data['quantity'],
+                'price' => $item['Harga_Item'],
+                'name' => $item['Nama_Item']
+            ];
+        }
+    }
+
+    // Create transactions for each toko
+    $transaction_ids = [];
+    foreach ($items_by_toko as $toko_id => $toko_items) {
+        // Generate transaction ID
+        $transaction_id = generateID('TRX', 'transaksi', 'ID_Transaksi');
+        $transaction_ids[] = $transaction_id;
+        
+        // Calculate total for this toko
+        $toko_total = 0;
+        foreach ($toko_items as $item) {
+            $toko_total += $item['price'] * $item['quantity'];
+        }
+        
+        // Insert transaction
+        $transaction_query = "INSERT INTO transaksi (ID_Transaksi, ID_Sesi, ID_Toko, Tanggal_Transaksi, Total_Transaksi, Metode_Pembayaran, Status_Transaksi) 
+                             VALUES ('$transaction_id', '$session_id', '$toko_id', NOW(), $toko_total, '$payment_method', 'MENUNGGU')";
+        
+        if (!mysqli_query($conn, $transaction_query)) {
+            throw new Exception('Gagal membuat transaksi');
+        }
+        
+        // Insert detail transactions
+        foreach ($toko_items as $item) {
+            $detail_id = generateID('DTL', 'detail_transaksi', 'ID_Detail');
+            $subtotal = $item['price'] * $item['quantity'];
+            
+            $detail_query = "INSERT INTO detail_transaksi (ID_Detail, ID_Transaksi, ID_Item, Jumlah_Item, Subtotal_Item) 
+                            VALUES ('$detail_id', '$transaction_id', '{$item['item_id']}', {$item['quantity']}, $subtotal)";
+            
+            if (!mysqli_query($conn, $detail_query)) {
+                throw new Exception('Gagal membuat detail transaksi');
+            }
+        }
+    }
+
+    // Commit transaction
+    mysqli_commit($conn);
+    
+    echo json_encode([
+        'success' => true, 
+        'message' => 'Pesanan berhasil dibuat',
+        'transaction_id' => implode(', ', $transaction_ids),
+        'session_id' => $session_id
+    ]);
+
+} catch (Exception $e) {
+    // Rollback transaction
+    mysqli_rollback($conn);
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+}
+?>

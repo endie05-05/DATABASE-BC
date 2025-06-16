@@ -1,78 +1,36 @@
 <?php
-// config.php - Konfigurasi Database dan Functions
-session_start();
+require_once 'config.php';
 
-// Database Configuration
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$database = 'database_bc_unand';
+header('Content-Type: application/json');
 
-$conn = mysqli_connect($host, $username, $password, $database);
-
-if (!$conn) {
-    die("Koneksi gagal: " . mysqli_connect_error());
+// Check if user is logged in and is customer
+if (!isLoggedIn() || !isCustomer()) {
+    echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
+    exit;
 }
 
-// Set charset untuk mendukung karakter Indonesia
-mysqli_set_charset($conn, "utf8");
+$customer_id = $_SESSION['user_id'];
 
-// Function untuk membersihkan input
-function clean_input($data) {
-    global $conn;
-    $data = trim($data);
-    $data = stripslashes($data);
-    $data = htmlspecialchars($data);
-    return mysqli_real_escape_string($conn, $data);
+// Get active transactions for this customer
+$query = "SELECT t.ID_Transaksi, t.Status_Transaksi, s.No_Meja, tk.Nama_Toko
+          FROM transaksi t 
+          JOIN sesi_pemesanan s ON t.ID_Sesi = s.ID_Sesi
+          JOIN toko tk ON t.ID_Toko = tk.ID_Toko
+          WHERE s.ID_Pelanggan = '$customer_id' 
+          AND s.Status_Sesi = 'AKTIF'
+          ORDER BY t.Tanggal_Transaksi DESC";
+
+$result = mysqli_query($conn, $query);
+
+$updates = [];
+while ($row = mysqli_fetch_assoc($result)) {
+    $updates[] = [
+        'id' => $row['ID_Transaksi'],
+        'status' => $row['Status_Transaksi'],
+        'table' => $row['No_Meja'],
+        'toko' => $row['Nama_Toko']
+    ];
 }
 
-// Function untuk generate ID otomatis
-function generateID($prefix, $table, $column) {
-    global $conn;
-    $query = "SELECT $column FROM $table WHERE $column LIKE '$prefix%' ORDER BY $column DESC LIMIT 1";
-    $result = mysqli_query($conn, $query);
-    
-    if (mysqli_num_rows($result) > 0) {
-        $row = mysqli_fetch_assoc($result);
-        $lastID = $row[$column];
-        $number = intval(substr($lastID, strlen($prefix))) + 1;
-        return $prefix . str_pad($number, 3, '0', STR_PAD_LEFT);
-    } else {
-        return $prefix . '001';
-    }
-}
-
-// Function untuk format rupiah
-function formatRupiah($angka) {
-    return 'Rp ' . number_format($angka, 0, ',', '.');
-}
-
-// Function untuk cek login
-function isLoggedIn() {
-    return isset($_SESSION['user_id']);
-}
-
-// Function untuk cek role
-function isAdmin() {
-    return isset($_SESSION['role']) && $_SESSION['role'] == 'admin';
-}
-
-function isCustomer() {
-    return isset($_SESSION['role']) && $_SESSION['role'] == 'customer';
-}
-
-// Function untuk redirect
-function redirect($url) {
-    header("Location: $url");
-    exit();
-}
-
-// Function untuk show alert
-function showAlert($message, $type = 'info') {
-    echo "<script>
-        document.addEventListener('DOMContentLoaded', function() {
-            showNotification('$message', '$type');
-        });
-    </script>";
-}
+echo json_encode(['success' => true, 'updates' => $updates]);
 ?>
